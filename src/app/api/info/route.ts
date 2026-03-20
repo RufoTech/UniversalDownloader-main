@@ -1,8 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
+import fs from "fs";
+import os from "os";
+import path from "path";
 
 const execAsync = promisify(exec);
+
+// Helper function to handle cookies
+function getCookiesPath() {
+  // 1. Check for local cookies.txt file in the root first
+  const localCookiesFile = path.join(process.cwd(), "cookies.txt");
+  if (fs.existsSync(localCookiesFile)) {
+    return localCookiesFile;
+  }
+
+  // 2. Check for environment variables
+  const ytCookies = process.env.YOUTUBE_COOKIES || "";
+  const igCookies = process.env.INSTAGRAM_COOKIES || "";
+  
+  if (!ytCookies && !igCookies) return null;
+  
+  // Combine all cookie strings into one
+  const combinedCookies = [ytCookies, igCookies].filter(Boolean).join('\n');
+  
+  const tempDir = os.tmpdir();
+  const cookiesPath = path.join(tempDir, "combined_cookies.txt");
+  
+  // Write cookies to temp file
+  fs.writeFileSync(cookiesPath, combinedCookies.replace(/\\n/g, '\n'));
+  return cookiesPath;
+}
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get("url");
@@ -30,9 +58,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ detail: "yt-dlp sistemdə tapılmadı və ya işləmir." }, { status: 500 });
     }
 
-    // -J outputs JSON. --no-warnings prevents extra text.
+    const cookiesPath = getCookiesPath();
+    let ytDlpCmd = `yt-dlp -J --no-warnings`;
+    
+    if (cookiesPath) {
+      ytDlpCmd += ` --cookies "${cookiesPath}"`;
+    }
+
     console.log(`Executing yt-dlp for URL: ${cleanUrl}`);
-    const { stdout, stderr } = await execAsync(`yt-dlp -J --no-warnings "${cleanUrl}"`);
+    const { stdout, stderr } = await execAsync(`${ytDlpCmd} "${cleanUrl}"`);
     
     if (!stdout) {
       console.error("Empty stdout from yt-dlp. Stderr:", stderr);

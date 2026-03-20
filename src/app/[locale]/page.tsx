@@ -4,15 +4,34 @@ import { FaYoutube, FaTiktok, FaInstagram, FaFacebook, FaVk } from "react-icons/
 import { SiOpenai } from "react-icons/si";
 import { useTranslation } from "react-i18next";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import JsonLd from "@/components/JsonLd";
 
 export default function Home() {
   const { t, i18n } = useTranslation('common');
   const currentLocale = i18n.language;
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ethereal-downloader.com';
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': ['WebSite', 'SoftwareApplication'],
+    name: 'Ethereal Downloader',
+    url: `${baseUrl}/${currentLocale}`,
+    description: t('hero_subtitle'),
+    applicationCategory: 'MultimediaApplication',
+    operatingSystem: 'Any',
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'USD',
+    },
+    inLanguage: currentLocale,
+  };
 
   return (
     <>
+      <JsonLd data={jsonLd} />
       {/* TopNavBar */}
-      <nav className="fixed top-0 w-full z-50 bg-[#192540]/80 backdrop-blur-xl shadow-[0px_20px_40px_rgba(0,0,0,0.4)]">
+      <header className="fixed top-0 w-full z-50 bg-[#192540]/80 backdrop-blur-xl shadow-[0px_20px_40px_rgba(0,0,0,0.4)]">
         <div className="flex justify-between items-center px-8 h-20 w-full max-w-7xl mx-auto">
           <div className="text-2xl font-black tracking-tighter text-[#dee5ff] font-manrope">
             Ethereal Downloader
@@ -32,7 +51,7 @@ export default function Home() {
             </button>
           </div>
         </div>
-      </nav>
+      </header>
 
       <main className="pt-32 pb-20 px-6">
         {/* Hero Section */}
@@ -46,8 +65,8 @@ export default function Home() {
           </p>
 
           {/* Social Platforms Grid (Main interaction point) */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 w-full max-w-5xl mt-8">
-            <Link href={`/${currentLocale}/downloader/youtube`} className="bg-surface-container hover:bg-surface-container-high p-8 rounded-xl flex flex-col items-center gap-4 transition-all group hover:-translate-y-2 hover:shadow-xl border border-transparent hover:border-red-500/30">
+          <nav aria-label="Supported Platforms" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 w-full max-w-5xl mt-8">
+            <Link href={`/${currentLocale}/downloader/youtube`} aria-label="YouTube Downloader" className="bg-surface-container hover:bg-surface-container-high p-8 rounded-xl flex flex-col items-center gap-4 transition-all group hover:-translate-y-2 hover:shadow-xl border border-transparent hover:border-red-500/30">
               <FaYoutube className="text-5xl text-on-surface-variant group-hover:text-red-500 transition-colors" />
               <div className="flex flex-col items-center">
                 <span className="font-bold text-lg tracking-wide">YouTube</span>
@@ -86,7 +105,7 @@ export default function Home() {
                 <span className="text-xs text-on-surface-variant mt-1 text-center">{t('vk_desc')}</span>
               </div>
             </Link>
-          </div>
+          </nav>
         </section>
 
        

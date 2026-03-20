@@ -118,7 +118,8 @@ export async function GET(req: NextRequest) {
     }
 
     const cookiesPath = getCookiesPath();
-    let ytDlpCmd = `yt-dlp -J --no-warnings`;
+    // Use robust mobile clients and skip heavy webpage parsing to bypass PO Token requirements
+    let ytDlpCmd = `yt-dlp -J --no-warnings --extractor-args "youtube:player_client=ios,android" --extractor-args "youtubetab:skip=webpage"`;
     
     if (cookiesPath) {
       ytDlpCmd += ` --cookies "${cookiesPath}"`;

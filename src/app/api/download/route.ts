@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
 
     // 2. Second Fallback: Local Disk Merging yt-dlp
     const cookiesPath = getCookiesPath();
-    const titleArgs = ["--print", "title"];
+    const titleArgs = ["--print", "title", "--extractor-args", "youtube:player_client=ios,android"];
     if (cookiesPath) titleArgs.push("--cookies", cookiesPath);
     titleArgs.push(cleanUrl);
 
@@ -167,7 +167,7 @@ export async function GET(req: NextRequest) {
     }
 
     const tempFilePath = path.join(os.tmpdir(), `dl_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`);
-    const args = ["-f", formatFlag, "-o", tempFilePath];
+    const args = ["-f", formatFlag, "-o", tempFilePath, "--extractor-args", "youtube:player_client=ios,android"];
     if (cookiesPath) args.push("--cookies", cookiesPath);
     args.push(cleanUrl);
 

@@ -65,9 +65,25 @@ export async function GET(req: NextRequest) {
   const isAudio = format === "mp3";
 
   try {
-    // Cobalt API Intersept for Instagram
-    if (cleanUrl.includes("instagram.com")) {
+    const isYoutube = cleanUrl.includes("youtube.com") || cleanUrl.includes("youtu.be");
+    let cobaltQuality = "1080";
+    if (isYoutube && qualityId) {
+      if (qualityId === "136" || qualityId === "22") cobaltQuality = "720";
+      else if (qualityId === "135") cobaltQuality = "480";
+      else if (qualityId === "134" || qualityId === "18") cobaltQuality = "360";
+      else if (qualityId === "133") cobaltQuality = "240";
+      else if (qualityId === "160" || qualityId === "394") cobaltQuality = "144";
+    }
+
+    // 1. First Fallback: Cobalt API (For Instagram and YouTube)
+    if (cleanUrl.includes("instagram.com") || isYoutube) {
       try {
+        const payload: any = { url: cleanUrl };
+        if (isYoutube) {
+          payload.vQuality = cobaltQuality;
+          if (isAudio) payload.isAudioOnly = true;
+        }
+
         const res = await fetch("https://api.cobalt.tools/", {
           method: "POST",
           headers: {
@@ -75,7 +91,7 @@ export async function GET(req: NextRequest) {
             "Content-Type": "application/json",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
           },
-          body: JSON.stringify({ url: cleanUrl })
+          body: JSON.stringify(payload)
         });
 
         if (res.ok) {
@@ -98,7 +114,7 @@ export async function GET(req: NextRequest) {
             if (vidRes.ok) {
               const extFromUrl = targetUrl.includes(".jpg") || targetUrl.includes(".webp") || targetUrl.includes("jpg") ? "jpg" : "mp4";
               const mimeType = extFromUrl === "jpg" ? "image/jpeg" : (isAudio ? "audio/mp4" : "video/mp4");
-              const title = "instagram_post";
+              const title = "download";
               const finalExt = extFromUrl === "jpg" ? "jpg" : (isAudio ? "m4a" : "mp4");
               
               return new NextResponse(vidRes.body as any, {
@@ -112,15 +128,13 @@ export async function GET(req: NextRequest) {
         }
       } catch (err) {
         console.error("Cobalt Download Error:", err);
-        // Fallback to yt-dlp below
       }
     }
 
+    // 2. Second Fallback: Local Disk Merging yt-dlp
     const cookiesPath = getCookiesPath();
     const titleArgs = ["--print", "title"];
-    if (cookiesPath) {
-      titleArgs.push("--cookies", cookiesPath);
-    }
+    if (cookiesPath) titleArgs.push("--cookies", cookiesPath);
     titleArgs.push(cleanUrl);
 
     const getTitleCmd = spawn("yt-dlp", titleArgs);
@@ -144,56 +158,55 @@ export async function GET(req: NextRequest) {
       ext = "m4a";
       mimeType = "audio/mp4";
     } else {
-      if (qualityId) {
-        formatFlag = `${qualityId}/best[ext=mp4]/best`;
+      if (qualityId && qualityId !== "undefined" && qualityId !== "null") {
+        // Allows yt-dlp to merge independent video and audio formats into a final mp4
+        formatFlag = `${qualityId}+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`;
       } else {
-        formatFlag = "best[ext=mp4]/best";
+        formatFlag = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best";
       }
     }
 
-    const args = ["-f", formatFlag, "-o", "-"];
-    if (cookiesPath) {
-      args.push("--cookies", cookiesPath);
-    }
-
-    if (itemId && itemId !== "undefined") {
-      // Sometimes we can use --match-filter or similar if we want a specific ID, 
-      // but for basic usage we'll just download the URL. If it's a specific photo, 
-      // we might handle that via proxy-image anyway.
-    }
+    const tempFilePath = path.join(os.tmpdir(), `dl_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`);
+    const args = ["-f", formatFlag, "-o", tempFilePath];
+    if (cookiesPath) args.push("--cookies", cookiesPath);
     args.push(cleanUrl);
 
     const downloadCmd = spawn("yt-dlp", args);
 
-    const stream = new ReadableStream({
-      start(controller) {
-        downloadCmd.stdout.on("data", (chunk) => {
-          controller.enqueue(chunk);
+    return new Promise((resolve) => {
+      downloadCmd.on("close", (code) => {
+        if (code !== 0 || !fs.existsSync(tempFilePath)) {
+          console.error(`yt-dlp failed or file not found: ${tempFilePath}`);
+          resolve(NextResponse.json({ detail: "Disk Download Failed" }, { status: 500 }));
+          return;
+        }
+
+        const fileStream = fs.createReadStream(tempFilePath);
+        const readableStream = new ReadableStream({
+          start(controller) {
+            fileStream.on("data", (chunk) => controller.enqueue(chunk));
+            fileStream.on("end", () => {
+              controller.close();
+              fs.unlink(tempFilePath, () => {}); // Cleanup
+            });
+            fileStream.on("error", (err) => {
+              controller.error(err);
+              fs.unlink(tempFilePath, () => {}); // Cleanup
+            });
+          },
+          cancel() {
+            fileStream.destroy();
+            fs.unlink(tempFilePath, () => {}); // Cleanup
+          }
         });
 
-        downloadCmd.stdout.on("end", () => {
-          controller.close();
-        });
-
-        downloadCmd.stderr.on("data", (data) => {
-          console.log(`yt-dlp stderr: ${data}`);
-        });
-
-        downloadCmd.on("error", (err) => {
-          console.error("yt-dlp process error:", err);
-          controller.error(err);
-        });
-      },
-      cancel() {
-        downloadCmd.kill();
-      },
-    });
-
-    return new NextResponse(stream, {
-      headers: {
-        "Content-Type": mimeType,
-        "Content-Disposition": `attachment; filename="${title}.${ext}"`,
-      },
+        resolve(new NextResponse(readableStream, {
+          headers: {
+            "Content-Type": mimeType,
+            "Content-Disposition": `attachment; filename="${title}.${ext}"`,
+          }
+        }));
+      });
     });
 
   } catch (error: any) {

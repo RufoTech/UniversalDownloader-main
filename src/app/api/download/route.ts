@@ -173,7 +173,7 @@ export async function GET(req: NextRequest) {
 
     const downloadCmd = spawn("yt-dlp", args);
 
-    return new Promise((resolve) => {
+    return new Promise<NextResponse>((resolve) => {
       downloadCmd.on("close", (code) => {
         if (code !== 0 || !fs.existsSync(tempFilePath)) {
           console.error(`yt-dlp failed or file not found: ${tempFilePath}`);

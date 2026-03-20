@@ -65,6 +65,57 @@ export async function GET(req: NextRequest) {
   const isAudio = format === "mp3";
 
   try {
+    // Cobalt API Intersept for Instagram
+    if (cleanUrl.includes("instagram.com")) {
+      try {
+        const res = await fetch("https://api.cobalt.tools/", {
+          method: "POST",
+          headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+          },
+          body: JSON.stringify({ url: cleanUrl })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          let targetUrl = data.url;
+
+          if (data.status === "picker" && data.picker) {
+            if (itemId && itemId.startsWith("ig-")) {
+               const index = parseInt(itemId.replace("ig-", ""), 10);
+               if (!isNaN(index) && data.picker[index]) {
+                   targetUrl = data.picker[index].url;
+               }
+            } else {
+               targetUrl = data.picker[0].url;
+            }
+          }
+
+          if (targetUrl) {
+            const vidRes = await fetch(targetUrl);
+            if (vidRes.ok) {
+              const extFromUrl = targetUrl.includes(".jpg") || targetUrl.includes(".webp") || targetUrl.includes("jpg") ? "jpg" : "mp4";
+              const mimeType = extFromUrl === "jpg" ? "image/jpeg" : (isAudio ? "audio/mp4" : "video/mp4");
+              const title = "instagram_post";
+              const finalExt = extFromUrl === "jpg" ? "jpg" : (isAudio ? "m4a" : "mp4");
+              
+              return new NextResponse(vidRes.body as any, {
+                headers: {
+                  "Content-Type": mimeType,
+                  "Content-Disposition": `attachment; filename="${title}.${finalExt}"`,
+                }
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Cobalt Download Error:", err);
+        // Fallback to yt-dlp below
+      }
+    }
+
     const cookiesPath = getCookiesPath();
     const titleArgs = ["--print", "title"];
     if (cookiesPath) {

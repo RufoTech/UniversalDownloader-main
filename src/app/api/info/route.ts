@@ -50,6 +50,65 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Cobalt API intersept for Instagram
+    if (cleanUrl.includes("instagram.com")) {
+      try {
+        const res = await fetch("https://api.cobalt.tools/", {
+          method: "POST",
+          headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+          },
+          body: JSON.stringify({ url: cleanUrl })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          let items: any[] = [];
+          
+          if (data.status === "picker") {
+            items = data.picker.map((p: any, i: number) => ({
+              id: `ig-${i}`,
+              title: "Instagram Post",
+              thumbnail: p.thumb || p.url,
+              duration: 0,
+              isImageOnly: p.type === "photo",
+              formats: p.type === "video" ? [{
+                format_id: "cobalt",
+                resolution: "1080p",
+                height: 1080,
+                ext: "mp4",
+                filesize: 0
+              }] : []
+            }));
+          } else if (data.status === "redirect" || data.status === "tunnel" || data.status === "stream") {
+            items = [{
+              id: "ig-vid",
+              title: "Instagram Post",
+              thumbnail: null,
+              duration: 0,
+              isImageOnly: false,
+              formats: [{
+                format_id: "cobalt",
+                resolution: "1080p",
+                height: 1080,
+                ext: "mp4",
+                filesize: 0
+              }]
+            }];
+          }
+
+          if (items.length > 0) {
+            return NextResponse.json({ items });
+          }
+        }
+      } catch (err) {
+        console.error("Cobalt Info Error:", err);
+        // Fallback to yt-dlp below
+      }
+    }
+
     // Check if yt-dlp is available by trying to get version first (debugging step)
     try {
       await execAsync("yt-dlp --version");

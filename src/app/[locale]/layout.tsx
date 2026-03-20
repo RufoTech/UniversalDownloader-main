@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const { t } = await initTranslations(locale, ['common']);
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ethereal-downloader.com';
-  
+
   // Clean hero title from HTML tags for SEO
   const rawTitle = t('hero_title').replace(/<[^>]*>?/gm, '');
   const title = `${rawTitle} | Ethereal Downloader`;

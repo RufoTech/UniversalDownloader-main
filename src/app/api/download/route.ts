@@ -167,26 +167,48 @@ export async function GET(req: NextRequest) {
       ext = "m4a";
       mimeType = "audio/mp4";
     } else {
-      if (qualityId && qualityId !== "undefined" && qualityId !== "null") {
-        // Allows yt-dlp to merge independent video and audio formats into a final mp4
-        formatFlag = `${qualityId}+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`;
+      // Convert cobalt-prefixed quality IDs to proper yt-dlp format strings
+      let effectiveQualityId = qualityId;
+      if (qualityId && qualityId.startsWith("cobalt-")) {
+        const height = qualityId.replace("cobalt-", "");
+        effectiveQualityId = null; // Don't use as raw format ID
+        formatFlag = `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}]/best`;
+      } else if (effectiveQualityId && effectiveQualityId !== "undefined" && effectiveQualityId !== "null") {
+        formatFlag = `${effectiveQualityId}+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`;
       } else {
         formatFlag = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best";
       }
     }
 
     const tempFilePath = path.join(os.tmpdir(), `dl_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`);
-    const args = ["-f", formatFlag, "-o", tempFilePath, "--extractor-args", "youtube:player_client=ios,android"];
+    const args = ["-f", formatFlag, "-o", tempFilePath, "--merge-output-format", "mp4", "--extractor-args", "youtube:player_client=ios,android"];
     if (cookiesPath) args.push("--cookies", cookiesPath);
     args.push(cleanUrl);
 
+    console.log(`yt-dlp command args: ${args.join(" ")}`);
     const downloadCmd = spawn("yt-dlp", args);
+
+    // Capture stderr for error reporting
+    let stderrOutput = "";
+    downloadCmd.stderr.on("data", (data) => {
+      stderrOutput += data.toString();
+    });
 
     return new Promise<NextResponse>((resolve) => {
       downloadCmd.on("close", (code) => {
         if (code !== 0 || !fs.existsSync(tempFilePath)) {
-          console.error(`yt-dlp failed or file not found: ${tempFilePath}`);
-          resolve(NextResponse.json({ detail: "Disk Download Failed" }, { status: 500 }));
+          console.error(`yt-dlp failed (code ${code}). stderr: ${stderrOutput}`);
+          
+          let errorDetail = "Download uğursuz oldu.";
+          if (stderrOutput.includes("Sign in to confirm you're not a bot") || stderrOutput.includes("cookies")) {
+            errorDetail = "YouTube bot yoxlaması. Server-də YOUTUBE_COOKIES mühit dəyişəni tələb olunur.";
+          } else if (stderrOutput.includes("HTTP Error 403")) {
+            errorDetail = "YouTube bu videoya girişi qadağan etdi (403).";
+          } else if (stderrOutput.includes("Video unavailable")) {
+            errorDetail = "Video mövcud deyil və ya gizlidir.";
+          }
+          
+          resolve(NextResponse.json({ detail: errorDetail }, { status: 500 }));
           return;
         }
 

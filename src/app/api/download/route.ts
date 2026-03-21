@@ -85,24 +85,24 @@ export async function GET(req: NextRequest) {
       try {
         const payload: any = { url: cleanUrl };
         if (isYoutube) {
-          payload.vQuality = cobaltQuality;
-          if (isAudio) payload.isAudioOnly = true;
+          payload.videoQuality = cobaltQuality;
+          if (isAudio) payload.downloadMode = "audio";
         }
 
-        console.log(`Cobalt API request: quality=${cobaltQuality}, isAudio=${isAudio}`);
+        console.log(`Cobalt API request: quality=${cobaltQuality}, isAudio=${isAudio}, payload=${JSON.stringify(payload)}`);
         const res = await fetch("https://api.cobalt.tools/", {
           method: "POST",
           headers: {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
           },
           body: JSON.stringify(payload)
         });
 
+        const data = await res.json();
+        console.log(`Cobalt API response: status=${res.status}, body=${JSON.stringify(data)}`);
+
         if (res.ok) {
-          const data = await res.json();
-          console.log(`Cobalt API response status: ${data.status}`);
           let targetUrl = data.url;
 
           if (data.status === "picker" && data.picker) {
@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
             if (vidRes.ok) {
               const extFromUrl = targetUrl.includes(".jpg") || targetUrl.includes(".webp") || targetUrl.includes("jpg") ? "jpg" : "mp4";
               const mimeType = extFromUrl === "jpg" ? "image/jpeg" : (isAudio ? "audio/mp4" : "video/mp4");
-              const title = "download";
+              const title = data.filename || "download";
               const finalExt = extFromUrl === "jpg" ? "jpg" : (isAudio ? "m4a" : "mp4");
               
               return new NextResponse(vidRes.body as any, {
@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
             }
           }
         } else {
-          console.error(`Cobalt API failed with status: ${res.status}`);
+          console.error(`Cobalt API failed: ${res.status} - ${JSON.stringify(data)}`);
         }
       } catch (err) {
         console.error("Cobalt Download Error:", err);

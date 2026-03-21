@@ -58,7 +58,6 @@ export async function GET(req: NextRequest) {
           headers: {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
           },
           body: JSON.stringify({ url: cleanUrl })
         });

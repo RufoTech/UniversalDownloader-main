@@ -49,3 +49,7 @@ env/
 .env/
 backend/venv/
 backend/__pycache__/
+
+# Cookies
+cookies.txt
+combined_cookies.txt

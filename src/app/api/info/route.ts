@@ -109,6 +109,62 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Cobalt API intercept for YouTube (bypasses bot detection on cloud servers)
+    if (cleanUrl.includes("youtube.com") || cleanUrl.includes("youtu.be")) {
+      try {
+        const res = await fetch("https://api.cobalt.tools/", {
+          method: "POST",
+          headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+          },
+          body: JSON.stringify({ url: cleanUrl, isAudioOnly: false, vQuality: "1080" })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          // If Cobalt returned a valid response (redirect, tunnel, stream, or picker)
+          if (data.status === "redirect" || data.status === "tunnel" || data.status === "stream" || data.url) {
+            // Cobalt doesn't provide per-format metadata, so we offer predefined quality options
+            // These map to cobalt's vQuality parameter during download
+            const predefinedQualities = [
+              { format_id: "cobalt-2160", resolution: "2160p", height: 2160, ext: "mp4", filesize: 0 },
+              { format_id: "cobalt-1080", resolution: "1080p", height: 1080, ext: "mp4", filesize: 0 },
+              { format_id: "cobalt-720", resolution: "720p", height: 720, ext: "mp4", filesize: 0 },
+              { format_id: "cobalt-480", resolution: "480p", height: 480, ext: "mp4", filesize: 0 },
+              { format_id: "cobalt-360", resolution: "360p", height: 360, ext: "mp4", filesize: 0 },
+            ];
+
+            // Try to extract a title from the URL or use a generic one
+            let videoTitle = "YouTube Video";
+
+            const items = [{
+              id: "yt-cobalt",
+              title: videoTitle,
+              thumbnail: null as string | null,
+              duration: 0,
+              formats: predefinedQualities,
+              isImageOnly: false,
+            }];
+
+            // Try to get thumbnail from YouTube's known URL pattern
+            try {
+              const videoIdMatch = cleanUrl.match(/(?:v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+              if (videoIdMatch) {
+                items[0].thumbnail = `https://img.youtube.com/vi/${videoIdMatch[1]}/hqdefault.jpg`;
+              }
+            } catch { /* ignore */ }
+
+            return NextResponse.json({ items });
+          }
+        }
+      } catch (err) {
+        console.error("Cobalt YouTube Info Error:", err);
+        // Fall through to yt-dlp
+      }
+    }
+
     // Check if yt-dlp is available by trying to get version first (debugging step)
     try {
       await execAsync("yt-dlp --version");

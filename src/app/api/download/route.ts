@@ -68,7 +68,12 @@ export async function GET(req: NextRequest) {
     const isYoutube = cleanUrl.includes("youtube.com") || cleanUrl.includes("youtu.be");
     let cobaltQuality = "1080";
     if (isYoutube && qualityId) {
-      if (qualityId === "136" || qualityId === "22") cobaltQuality = "720";
+      // Handle new cobalt-prefixed format IDs from info route
+      if (qualityId.startsWith("cobalt-")) {
+        cobaltQuality = qualityId.replace("cobalt-", "");
+      }
+      // Handle legacy yt-dlp format IDs
+      else if (qualityId === "136" || qualityId === "22") cobaltQuality = "720";
       else if (qualityId === "135") cobaltQuality = "480";
       else if (qualityId === "134" || qualityId === "18") cobaltQuality = "360";
       else if (qualityId === "133") cobaltQuality = "240";
@@ -84,6 +89,7 @@ export async function GET(req: NextRequest) {
           if (isAudio) payload.isAudioOnly = true;
         }
 
+        console.log(`Cobalt API request: quality=${cobaltQuality}, isAudio=${isAudio}`);
         const res = await fetch("https://api.cobalt.tools/", {
           method: "POST",
           headers: {
@@ -96,6 +102,7 @@ export async function GET(req: NextRequest) {
 
         if (res.ok) {
           const data = await res.json();
+          console.log(`Cobalt API response status: ${data.status}`);
           let targetUrl = data.url;
 
           if (data.status === "picker" && data.picker) {
@@ -125,6 +132,8 @@ export async function GET(req: NextRequest) {
               });
             }
           }
+        } else {
+          console.error(`Cobalt API failed with status: ${res.status}`);
         }
       } catch (err) {
         console.error("Cobalt Download Error:", err);
